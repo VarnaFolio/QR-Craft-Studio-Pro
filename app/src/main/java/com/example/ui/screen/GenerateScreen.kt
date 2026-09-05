@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.QrCodeScanner
@@ -56,6 +57,7 @@ fun GenerateScreen(
     var selectedCategory by remember { mutableStateOf("URL Link") }
     var qrInputText by remember { mutableStateOf("https://qrcraft.studio/pro") }
     var selectedColorIndex by remember { mutableStateOf(0) }
+    var showProBanner by remember { mutableStateOf<String?>(null) }
     
     val colorOptions = listOf(
         Color(0xFF1B1429), // Dark Purple (Default)
@@ -167,6 +169,49 @@ fun GenerateScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (showProBanner != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigatePro() },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF221736)),
+                    border = BorderStroke(1.5.dp, Color(0xFFFFD700))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color(0xFF3B2859), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Достъпно само при PRO версия",
+                                color = Color(0xFFFFD700),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = showProBanner!!,
+                                color = Color(0xFFABA1BF),
+                                fontSize = 12.sp
+                            )
+                        }
+                        IconButton(onClick = { showProBanner = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFFABA1BF))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Top App Bar Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -358,7 +403,13 @@ fun GenerateScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(
                                 onClick = {
-                                    Toast.makeText(context, "Style templates available in Pro version", Toast.LENGTH_SHORT).show()
+                                    val prefs = context.getSharedPreferences("qr_craft_prefs", android.content.Context.MODE_PRIVATE)
+                                    val isPro = prefs.getBoolean("is_pro", false)
+                                    if (!isPro) {
+                                        showProBanner = "Кликнете тук, за да отключите персонализираните стилове и всички PRO функции!"
+                                    } else {
+                                        Toast.makeText(context, "Pro Style templates are active!", Toast.LENGTH_SHORT).show()
+                                    }
                                 },
                                 modifier = Modifier
                                     .size(48.dp)
@@ -375,7 +426,13 @@ fun GenerateScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(
                                 onClick = {
-                                    Toast.makeText(context, "Center logo embedding requires Pro tier", Toast.LENGTH_SHORT).show()
+                                    val prefs = context.getSharedPreferences("qr_craft_prefs", android.content.Context.MODE_PRIVATE)
+                                    val isPro = prefs.getBoolean("is_pro", false)
+                                    if (!isPro) {
+                                        showProBanner = "Кликнете тук, за да отключите вграждането на лого и всички PRO функции!"
+                                    } else {
+                                        Toast.makeText(context, "Pro Center Logo embedding is active!", Toast.LENGTH_SHORT).show()
+                                    }
                                 },
                                 modifier = Modifier
                                     .size(48.dp)
@@ -452,8 +509,7 @@ fun GenerateScreen(
                     val prefs = context.getSharedPreferences("qr_craft_prefs", android.content.Context.MODE_PRIVATE)
                     val isPro = prefs.getBoolean("is_pro", false)
                     if (!isPro) {
-                        Toast.makeText(context, "⭐ SVG Vector Export is a Pro VIP Feature! Go to PRO tab to unlock.", Toast.LENGTH_LONG).show()
-                        onNavigatePro()
+                        showProBanner = "Кликнете тук, за да отключите векторния SVG експорт и всички PRO функции!"
                         return@OutlinedButton
                     }
 
