@@ -1,10 +1,17 @@
 package com.example.ui.screen
 
 import android.content.ContentValues
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ImageDecoder
+import android.graphics.Paint
+import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -41,6 +48,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.util.QRCodeGenerator
+import com.example.util.QRModuleStyle
+import com.example.util.QREyeStyle
+import com.example.util.QRStylingConfig
 import com.example.util.SvgGenerator
 import com.example.viewmodel.QRCodeViewModel
 import java.io.OutputStream
@@ -57,24 +67,35 @@ fun GenerateScreen(
     var selectedCategory by remember { mutableStateOf("URL Link") }
     var qrInputText by remember { mutableStateOf("https://qrcraft.studio/pro") }
     var selectedColorIndex by remember { mutableStateOf(0) }
+    var stylingConfig by remember { mutableStateOf(QRStylingConfig()) }
     var showProBanner by remember { mutableStateOf<String?>(null) }
-    
-    val colorOptions = listOf(
-        Color(0xFF1B1429), // Dark Purple (Default)
-        Color(0xFF7C3AED), // Vibrant Purple
-        Color(0xFF0284C7), // Blue
-        Color(0xFF059669), // Emerald
-        Color(0xFFDC2626)  // Red
-    )
 
-    val currentFgColor = colorOptions[selectedColorIndex]
+    val logoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, it)) { decoder, _, _ ->
+                        decoder.isMutableRequired = true
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+                }
+                stylingConfig = stylingConfig.copy(logoBitmap = bitmap)
+                Toast.makeText(context, "Logo Loaded (ECL H Enabled)", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error loading logo: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // Generate QR Bitmap
-    val qrBitmap = remember(qrInputText, currentFgColor) {
+    val qrBitmap = remember(qrInputText, stylingConfig) {
         QRCodeGenerator.generateQRCode(
             text = qrInputText.ifBlank { "https://qrcraft.studio/pro" },
-            foregroundColor = currentFgColor,
-            backgroundColor = Color.White
+            config = stylingConfig
         )
     }
 
@@ -386,7 +407,16 @@ fun GenerateScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(
                                 onClick = {
-                                    selectedColorIndex = (selectedColorIndex + 1) % colorOptions.size
+                                    selectedColorIndex = (selectedColorIndex + 1) % 6
+                                    val newConfig = when(selectedColorIndex) {
+                                        0 -> stylingConfig.copy(colorStart = Color(0xFF1B1429), colorEnd = null)
+                                        1 -> stylingConfig.copy(colorStart = Color(0xFF7C3AED), colorEnd = null)
+                                        2 -> stylingConfig.copy(colorStart = Color(0xFF0284C7), colorEnd = null)
+                                        3 -> stylingConfig.copy(colorStart = Color(0xFF9C6ADE), colorEnd = Color(0xFF38BDF8)) // Gradient 1
+                                        4 -> stylingConfig.copy(colorStart = Color(0xFFF43F5E), colorEnd = Color(0xFFFB923C)) // Gradient 2
+                                        else -> stylingConfig.copy(colorStart = Color(0xFF059669), colorEnd = null)
+                                    }
+                                    stylingConfig = newConfig
                                 },
                                 modifier = Modifier
                                     .size(48.dp)
@@ -403,46 +433,75 @@ fun GenerateScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(
                                 onClick = {
-                                    val prefs = context.getSharedPreferences("qr_craft_prefs", android.content.Context.MODE_PRIVATE)
+                                    val prefs = context.getSharedPreferences("qr_craft_prefs", Context.MODE_PRIVATE)
                                     val isPro = prefs.getBoolean("is_pro", false)
                                     if (!isPro) {
                                         showProBanner = "Кликнете тук, за да отключите персонализираните стилове и всички PRO функции!"
                                     } else {
-                                        Toast.makeText(context, "Pro Style templates are active!", Toast.LENGTH_SHORT).show()
+                                        // Cycle through styling presets
+                                        val nextConfig = when {
+                                            stylingConfig.moduleStyle == QRModuleStyle.SQUARE -> stylingConfig.copy(
+                                                moduleStyle = QRModuleStyle.DOTS,
+                                                eyeFrameStyle = QREyeStyle.CIRCLE,
+                                                eyeBallStyle = QREyeStyle.CIRCLE
+                                            )
+                                            stylingConfig.moduleStyle == QRModuleStyle.DOTS -> stylingConfig.copy(
+                                                moduleStyle = QRModuleStyle.ROUNDED,
+                                                eyeFrameStyle = QREyeStyle.ROUNDED,
+                                                eyeBallStyle = QREyeStyle.SQUARE
+                                            )
+                                            stylingConfig.moduleStyle == QRModuleStyle.ROUNDED -> stylingConfig.copy(
+                                                moduleStyle = QRModuleStyle.EXTRA_ROUNDED,
+                                                eyeFrameStyle = QREyeStyle.ROUNDED,
+                                                eyeBallStyle = QREyeStyle.CIRCLE
+                                            )
+                                            else -> stylingConfig.copy(
+                                                moduleStyle = QRModuleStyle.SQUARE,
+                                                eyeFrameStyle = QREyeStyle.SQUARE,
+                                                eyeBallStyle = QREyeStyle.SQUARE
+                                            )
+                                        }
+                                        stylingConfig = nextConfig
+                                        Toast.makeText(context, "Style Updated!", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 modifier = Modifier
                                     .size(48.dp)
                                     .background(Color(0xFF221736), CircleShape)
-                                    .border(1.dp, Color(0xFF3B2859), CircleShape)
+                                    .border(1.dp, if (stylingConfig.moduleStyle != QRModuleStyle.SQUARE) Color(0xFF9C6ADE) else Color(0xFF3B2859), CircleShape)
                             ) {
-                                Icon(Icons.Outlined.GridOn, contentDescription = "Style", tint = Color(0xFFABA1BF))
+                                Icon(Icons.Outlined.GridOn, contentDescription = "Style", tint = if (stylingConfig.moduleStyle != QRModuleStyle.SQUARE) Color(0xFFB07AFF) else Color(0xFFABA1BF))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("STYLE", color = Color(0xFFABA1BF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("STYLE", color = if (stylingConfig.moduleStyle != QRModuleStyle.SQUARE) Color(0xFFB07AFF) else Color(0xFFABA1BF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
 
                         // Logo Tool
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(
                                 onClick = {
-                                    val prefs = context.getSharedPreferences("qr_craft_prefs", android.content.Context.MODE_PRIVATE)
+                                    val prefs = context.getSharedPreferences("qr_craft_prefs", Context.MODE_PRIVATE)
                                     val isPro = prefs.getBoolean("is_pro", false)
                                     if (!isPro) {
                                         showProBanner = "Кликнете тук, за да отключите вграждането на лого и всички PRO функции!"
                                     } else {
-                                        Toast.makeText(context, "Pro Center Logo embedding is active!", Toast.LENGTH_SHORT).show()
+                                        if (stylingConfig.logoBitmap == null) {
+                                            logoLauncher.launch("image/*")
+                                        } else {
+                                            stylingConfig = stylingConfig.copy(logoBitmap = null)
+                                            Toast.makeText(context, "Logo Removed", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 },
                                 modifier = Modifier
                                     .size(48.dp)
                                     .background(Color(0xFF221736), CircleShape)
-                                    .border(1.dp, Color(0xFF3B2859), CircleShape)
+                                    .border(1.dp, if (stylingConfig.logoBitmap != null) Color(0xFF9C6ADE) else Color(0xFF3B2859), CircleShape)
                             ) {
-                                Icon(Icons.Default.QrCode2, contentDescription = "Logo", tint = Color(0xFFABA1BF))
+                                Icon(Icons.Default.QrCode2, contentDescription = "Logo", tint = if (stylingConfig.logoBitmap != null) Color(0xFFB07AFF) else Color(0xFFABA1BF))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("LOGO", color = Color(0xFFABA1BF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("LOGO", color = if (stylingConfig.logoBitmap != null) Color(0xFFB07AFF) else Color(0xFFABA1BF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -514,7 +573,7 @@ fun GenerateScreen(
                     }
 
                     try {
-                        val svgContent = SvgGenerator.generateSvg(qrInputText)
+                        val svgContent = SvgGenerator.generateSvg(qrInputText, stylingConfig)
                         val filename = "QRCode_${System.currentTimeMillis()}.svg"
                         var fos: OutputStream? = null
 
