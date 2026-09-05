@@ -1,0 +1,6 @@
+{
+  "name": "QR Craft Studio",
+  "description": "Modern QR code generator and studio with freemium, Pro subscription, and B2B business tools",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
